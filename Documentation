@@ -1,0 +1,177 @@
+struct date_format
+	structure to hold the data
+
+struct transaction_format
+	- structure to hold details about transactions
+
+struct contacts_format
+	- structure to hold details about contacts
+
+struct audit_log
+	- structure to hold details about audit_logs
+
+struct account
+	- structure to hold details about accounts
+
+void print_menu()
+	- function to print the main commands of the program
+
+void void add_to_audit_log(char first_name[], char second_name[], char action[], char additional_description[], char transfer_from[], char transfer_to[], float amount, struct date_format date)
+	- function that adds a new entry to the audit log, with some small details
+
+int check_if_name(char name[], int length) 
+	-  function to verify if a name has the correct characters and length
+	- returns 1 if yes 0 otherwise
+
+int calculate_year(const char *date)  
+	-  calculate the year from a given data string
+	- return the year in int format
+
+int calculate_month(const char *date)
+	- Function to transform from string to integer for the month of the transaction in int format
+
+int calculate_day(const char *date)
+	- Function to transform from string to integer for the day of the transaction in int format
+
+int is_date_valid(const char *date) 
+	- function to verify if a given string is a valid date
+	- returns 0 if it is invalid, 1 otherwise
+
+int compare_dates(int year1, int month1, int day1, int year2, int month2, int day2) 
+	-compares the 2 dates , returns 1 if the first date is greater than the second one,
+
+int is_between_dates(int year1, int month1, int day1, int year2, int month2, int day2, int year_to_compare, int month_to_compare, int day_to_compare)
+	- Function to verify if a given date is between two other given dates
+	- returns 1 if it is between the dates
+
+int calculate_sum_of_digits(int number)
+	- function to calculate the sum of the digits of a number
+
+void from_string_to_asterisk(char text[])
+	-transform a given string into asterisk string(for the password)
+
+void account_details(struct account *accounts,int account_index)
+	- function to print the details of an account
+
+void print_user_options()
+	-function to print the possible things the user can do with his account
+
+void print_edit_account_menu()
+	- function to print the edit account menu
+
+int verify_if_double(const char *money)    
+	- will return -1 if the given is not a double type number
+	- function to verify if char is a float number
+
+void print_transaction_type()
+	- function to print the types of accounts the user can have
+
+float calculate_balance(struct account *accounts, int account_index)
+	- function to calculate of the account
+
+void add_transaction(struct account *accounts, int account_index)
+	- Function to add a transaction
+	- it will ask the user for details about the transaction, type, amount , date, description
+	- it variates for the type of the account the user has for saving accounts, the user will receive 2% of the account balance at that moment
+		if he has a credit account he can borrow money from the bank
+	- will print errors if the user innput is wrong
+
+void edit_account( struct account *accounts,int account_index)
+	- function to edit the account details
+	- the user can modify his first and last name , birthday, password(if he knows its)
+		- will print errors if the user innput is wrong
+
+void change_accounts(struct account *accounts, int account_index)
+	- function that deletes an account and frees the occupied memory
+	- deletes the account at index account_index
+
+void change_contacts(struct account *accounts, int account_index, int contact_index)
+	- function that deletes a contact and frees the occupied memory
+	- deletes the contact at index contact_index of the user at a account_index,
+
+void print_contacts(struct account *accounts,int account_index)
+	- function to print the contacts of the user
+
+void transaction_to_friend(struct account *accounts,int account_index)
+	- function to transfer money to a contact if the user has the money 
+	- will print errors if the user innput is wrong
+
+void add_contact( struct account *accounts,int account_index)
+	- function to add a new contact( first and last name , and will ask for the iban)
+	- will print errors if the iban is not found
+
+void delete_contact( struct account *accounts,int account_index)
+	- will print errors if the user innput is wrong
+	- function to delete a contact
+
+void delete_account( struct account *accounts,int account_index)
+	- function to delete the account
+	- deletes the account at account index
+
+void financial_report( struct account *accounts,int account_index)
+	- function to do a financial report
+	- will ask for 2 dates, will prin expenses and incomes between those dates
+	- will print errors if the user input is wrong
+
+void transaction_history( struct account *accounts,int account_index)
+	- print transaction history
+	- will print errors if there are no transactions
+
+void printAuditLog(struct audit_log *log)
+	- function to print the audit log
+
+void in_login_ui( struct account *accounts,int account_index)
+	- function to tackle what user can do
+	- uses other varios functions
+	- will print errors if the user input is wrong
+
+void register_account( struct account *accounts)
+	- function to register the account
+	- uses various othe functions
+	- will ask for various things from the user(first and last name, birthday, password , administrator passkey)
+	- wil generate a unique iban
+	- if the user is not allowed to have an account the function will stop
+	- will print errors if the user input is wrong
+
+void login( struct account *accounts)
+	- function that does the login
+	- will ask the name and password of the user
+	- if the password introduced is wrong multiple times the user 
+	- will print errors if the user input is wrong or if the account is not found
+
+void exportDataToCSV(struct account *accounts, int numAccounts)
+	- function that saves the data in a csv file
+
+void importDataFromCSV(struct account *accounts, int *numAccounts)
+	- function that imports the data from a csv file
+
+int readAuditLogFromFile(struct audit_log *log)
+	- function that loads from the audit file
+
+void clearAndWriteAuditLogToFile	
+	- write the details of the audit log form the file
+
+int main()
+	- initiailizes the menu
+	- starts the program
+	- uses all the other functions
+	- 	- will print errors if the user input is wrong
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,1532 @@
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <ctype.h>
+
+struct date_format {
+    int year, month, day;
+};
+
+int active_accounts = 0, num_accounts = 0;
+
+struct transaction_format {
+    char type[20];
+    float amount;
+    char description[50];
+    char from_acc_iban[24];
+    char to_acc_iban[24];
+    struct date_format data;
+};
+
+struct contacts_format{
+    char first_name[20];
+    char second_name[20];
+    char iban[24];
+
+};
+struct account{
+    int is_administrator;
+    int number_of_friends;
+    char first_name[20];
+    char second_name[20];
+    char password[30];
+    char account_type[20];
+    float balance;
+    char iban[24];
+    struct date_format user_birthday;
+    struct transaction_format *transactions;
+    struct contacts_format *contact;
+    int number_of_transactions;
+};
+
+void print_menu()
+{
+    printf("What do you want to do? Please select one option of the following:\n");
+    printf("1. Login\n");
+    printf("2. Register\n");
+    printf("3. Save from file\n");
+    printf("4. Import from file\n");
+    printf("5. Exit\n\n");
+}
+
+int check_if_name(char name[], int length)
+{
+    if (length < 3) {
+        printf("The name must have a minimum of 3 letters!\n");
+        return 0;
+    }
+
+    if (name[0] < 'A' || name[0] > 'Z') {
+        printf("The first character must be a capital letter!\n");
+        return 0;
+    }
+
+    for (int i = 1 ; i < length; i++) {
+        if ((name[i] < 'a' || name[i] > 'z') && name[i] != ' ')
+        {
+            printf("Only the first letter should be capital / other special characters are not accepted\n");
+            return 0;
+        }
+    }
+    return 1;
+}
+
+int calculate_year(const char *date)
+{
+    int year = (date[0] - '0') * 1000 + (date[1] - '0') * 100 + (date[2] - '0') * 10 + (date[3] -'0');  // we transform it into integer and return
+    return year;
+}
+
+//Function to transform from string to integer for the month of the transaction
+int calculate_month(const char *date)
+{
+    int month = (date[5] - '0') * 10 + (date[6] - '0'); // we transform it into integer and return
+    return month;
+}
+
+//Function to transform from string to integer for the day of the transaction
+int calculate_day(const char *date)
+{
+    int day = (date[8] - '0') * 10 + (date[9] - '0');// we transform it into integer and return
+    return day;
+}
+
+int is_date_valid(const char *date)
+{
+    if (strlen (date) != 10)    // we use the format YYYY-MM-DD , in total are 10 characters, if the input string has more or less than 10 characters then the input date is not valid
+        return 0;
+
+    if (date[7] != '-' || date[4] != '-') // we use '-' character to delimitate the year, month and day , if the characters '-' are not in the right places then the date is invalid
+        return 0;
+
+    int an = calculate_year(date);
+    int luna = calculate_month(date); // we transform the date string into integers, so we can cancel the dates that don't exist more easily
+    int zi = calculate_day(date);
+
+    if ( an < 1000)     // we will not take into account the dates before the year 1000, because of the format YYYY
+        return 0;
+
+
+    if ( luna < 0 || luna > 12 )    // we cancel out the months that don't exist
+        return 0;
+
+    if ( (luna == 1 || luna == 3 || luna == 5 || luna == 7 || luna == 8 || luna == 10 || luna == 12) && zi > 31) // we cancel out the invalid dates for they months that have 31 days
+        return 0;
+
+    if ( (luna == 4 || luna == 6 || luna == 9 || luna == 11 ) && zi > 30) // we cancel out the invalid dates for they months that have 30 days
+        return 0;
+
+    if ( an % 4 == 0 && luna == 2 && zi > 29) // we cancel out the invalid date for the month of February in the bisect years
+        return 0;
+
+    if( an % 4 != 0 && luna == 2 && zi > 28) // we cancel out the invalid date for the month of February in the non-bisect years
+        return 0;
+
+    return 1;
+
+}
+
+//Function to compare 2 dates
+int compare_dates(int year1, int month1, int day1, int year2, int month2, int day2) // compares the 2 dates , returns 1 if the first date is greater than the second one,
+{                                                                                  // returns 0 if they are equal, return -1 if the second one is greater
+    if(year1 > year2)   // first we compare the years
+        return 1;
+
+    if(year1 == year2 && month1 > month2) // if the years are equal , we verify the months
+        return 1;
+
+    if(year1 == year2 && month1 == month2 && day1 > day2) // if the years and months are equal , we verify the days now
+        return 1;
+
+    if(year1 == year2 && month1 == month2 && day1 == day2) // if the years , months and days are equal , then the two dates are equal
+        return 0;
+
+    return -1;  // if the previous conditions are not met then the second date is greater than the first date
+}
+//Function to verify if a given date is between two other given dates
+int is_between_dates(int year1, int month1, int day1, int year2, int month2, int day2, int year_to_compare, int month_to_compare, int day_to_compare)
+{                                                                                                       // returns 1 if year_to_compare,month_to_compare and day_to_compare is between year1, and year2,
+    // between month1 and month2, and between day1 and day 2, it will return 0 otherwise
+    if(compare_dates(year_to_compare, month_to_compare, day_to_compare, year1, month1, day1) == -1) // we compare the date we need to compare with the beginning date
+        return 0;
+
+    if(compare_dates(year_to_compare, month_to_compare, day_to_compare, year2, month2, day2) == 1) // we compare the date we need to compare with the end date
+        return 0;
+
+    return 1;                                                                                    // will return 1 if the given date is between the interval
+}
+int calculate_sum_of_digits(int number)
+{
+    int sum = 0;
+    while(number){
+        sum = sum + number % 10;
+        number = number / 10;
+    }
+    return sum;
+}
+
+void from_string_to_asterisk(char text[])
+{
+    for (int i = 0 ; i < strlen(text); i++)
+        printf("*");
+}
+
+void account_details(struct account *accounts,int account_index)
+{
+    printf("%d", accounts[account_index].user_birthday.year);
+
+    printf("-----This is your account-----\n");
+
+    if(strcmp(accounts[account_index].account_type, "Savings") == 0)
+        printf("You have a savings account before doing a transaction you will get 2 percent of your balance!\n");
+
+    if(strcmp(accounts[account_index].account_type, "Credit") == 0)
+    {
+        printf("You have a credit account so you can go below 0 balance, with a maximum amount you can borrow money from us, but also only for withdrawals and payments!");
+        printf("You can borrow a maximum of %d money", (2024 - accounts[account_index].user_birthday.year) * 100 + accounts[account_index].user_birthday.month * 50);
+    }
+
+    if(accounts[account_index].is_administrator == 1)
+        printf("    You are an administrator\n");
+
+    printf("    First name: %s\n", accounts[account_index].first_name);
+    printf("    Last name: %s\n", accounts[account_index].second_name);
+
+    printf("    Your birthday is : %d/%d/%d\n", accounts[account_index].user_birthday.day, accounts[account_index].user_birthday.month, accounts[account_index].user_birthday.year);
+    printf("    Password:");
+    from_string_to_asterisk(accounts[account_index].password);
+    printf("\n");
+
+    printf("    Your iban: %s\n", accounts[account_index].iban);
+
+    printf("    Your current balance is: %f RON\n", accounts[account_index].balance);
+
+    printf("-----------------------------------\n");
+}
+
+void print_user_options()
+{
+    printf("What do you want to do?\n");
+    printf("1. View account details\n");
+    printf("2. Make a transaction\n");
+    printf("3. View balance\n");
+    printf("4. Edit account\n");
+    printf("5. Delete account\n");
+    printf("6. Financial report between 2 dates\n");
+    printf("7. View transaction history\n");
+    printf("8. View list of contacts\n");
+    printf("9. Add a contact\n");
+    printf("10. Delete a contact\n");
+    printf("11. Transfer money to a contact\n");
+    printf("12. Log out\n");
+
+}
+
+void print_edit_account_menu()
+{
+    printf("What do you want to change about your account?\n");
+    printf("1. First name\n");
+    printf("2. Last name\n");
+    printf("3. Birthday date\n");
+    printf("4. Password\n");
+    printf("5. Exit\n");
+
+
+}
+
+int verify_if_double(const char *money)    // will return -1 if the given is not a double type number
+{
+    int length = strlen(money);        // we take the length of the string
+
+    int decimal_point = 0;            // in the decimal_point variable we hold how many decimal points ('.') we have in the string
+
+    for ( int i = 0 ; i < length ; i++) // we go through the string
+    {
+        char character = money[i];          // we take each character and verify some conditions
+
+        if (character == '.')        // if we meet a dot('.') we increase the value of the decimal points
+        {
+            decimal_point++;
+        }
+
+        if(decimal_point == 2)      // if we meet a second dot('.') there is no point in continuing the search , a double type variable has only one dot in it's composition(e.g. 3.14)
+            return -1;              // so we return -1
+
+        if((character < '0' || character > '9') && character != '.') // if there are other characters than numbers or dot('.') in the user input, then the number has not been introduced correctly
+            return -1;                                              // so we return -1
+    }
+    return 0;                   // if the previous conditions are not met then the number has been correctly introduced
+}
+
+void print_transaction_type()
+{
+    printf("What kind of transaction you want to do?\n");
+    printf("1. Deposit\n");
+    printf("2. Withdraw\n");
+    printf("3. Transfer\n");
+    printf("4. Payment\n");
+
+}
+
+float calculate_balance(struct account *accounts, int account_index)
+{
+    float balance = 0;     // initialize the balance
+
+    for ( int i = 0 ; i < accounts[account_index].number_of_transactions ; i++)     // go through all the transaction
+    {
+        if(strcmp(accounts[account_index].transactions[i].type, "Deposit") == 0)                     // if it's an income then add to balance
+            balance = balance + accounts[account_index].transactions[i].amount;
+        else
+        if(strcmp(accounts[account_index].transactions[i].type, "Withdraw") == 0)                 // if it's an expense then substract from the balance
+            balance = balance -  accounts[account_index].transactions[i].amount;
+        else
+            if(strcmp(accounts[account_index].transactions[i].type, "Transfer-") == 0)
+                balance = balance -  accounts[account_index].transactions[i].amount;
+            else if(strcmp(accounts[account_index].transactions[i].type, "Transfer+") == 0)
+                balance = balance + accounts[account_index].transactions[i].amount;
+            else if(strcmp(accounts[account_index].transactions[i].type, "Payment") == 0)
+                balance = balance - accounts[account_index].transactions[i].amount;
+            else if(strcmp(accounts[account_index].transactions[i].type, "Interest Rate") == 0)
+                balance = balance + accounts[account_index].transactions[i].amount;
+
+    }
+    return balance;         // return the balance
+}
+//Function to add transaction
+void add_transaction(struct account *accounts, int account_index)
+{
+    struct transaction_format new_transaction;   // we initialize a new transaction
+
+    while(1){
+        char date[11];
+        printf("Enter the date of the transaction (format YYYY-MM-DD)\n"); // we ask the user to introduce a date
+        scanf("%s", date);
+
+        if(is_date_valid(date) == 1)
+        {
+            if(calculate_year(date) - accounts[account_index].user_birthday.year >= 0){
+                new_transaction.data.day = calculate_day(date);
+                new_transaction.data.month = calculate_month(date);
+                new_transaction.data.year = calculate_year(date);
+                break;
+            }
+            else {
+                printf("You can't make transactions before you were born\n");
+                return;
+            }
+        }
+        else
+            printf("Please enter a valid date\n");
+    }
+
+    printf("Enter the description:\n");         // ask the user to introduce a description of the transaction
+
+    scanf(" %[^\n]s", new_transaction.description); // we read the description string until a new line is met
+
+    char money[30];         // variable used for holding the input user , of the amount variable
+
+    while(1)
+    {
+        printf("Enter the amount(will be considered only the first 2 digits of the number):\n"); // ask the user to insert the amount of the transaction
+
+        scanf("%s", money);     // read the user input
+
+        if(money[0] == '-')                                             // the amount cannot be negative , because we will take into account if it's a Income or expense later
+            printf("The amount entered must be a positive number\n");
+        else
+        if(verify_if_double(money) == -1)                         // we verify if the input has been introduced correctly
+            printf("Invalid input please enter a valid sum\n");  // repeat until the introduced value is correct
+        else
+            break;
+    }
+
+    new_transaction.amount = atof(money);   // we add the amount into the new structure with the atof function
+
+    float amount = new_transaction.amount;
+
+    int index = -1;
+
+
+    while(1)
+    {
+        char input[100];        // variable used for holding the input user , of the type variable
+
+        print_transaction_type(); // ask the for the user's input
+
+        scanf("%s", &input);        // read the input
+
+        if(strlen(input) > 1)       // verify if the command is valid , if not print error message
+            printf("Invalid command. Please Please enter a number between 1 and 5\n");
+        else{
+            int option = input[0] - '0';
+
+            if (option == 1) {
+                strcpy(new_transaction.type, "Deposit");
+                strcpy(new_transaction.from_acc_iban, accounts[account_index].iban);
+                strcpy(new_transaction.to_acc_iban, "0");
+            } else if (option == 2) {
+                    if(strcmp(accounts[account_index].account_type, "Credit") == 0 && accounts[account_index].balance - new_transaction.amount > -((2024 - accounts[account_index].user_birthday.year) * 100 + accounts[account_index].user_birthday.month * 50))
+                    {
+                        strcpy(new_transaction.type, "Withdraw");
+                        printf("You will borrow money from us, and your balance will be under 0 are you sure?");
+                        while (1) {
+                            printf("1. Yes\n2. No\n");
+                            char input_afirmation[5];
+                            scanf("%s", &input_afirmation);
+                            if (strlen(input_afirmation) > 1)       // verify if the command is valid, if not print error message
+                                printf("Invalid command.\n");
+                            else {
+                                int option1 = input_afirmation[0] - '0';
+                                if (option1 == 1) {
+                                    break;
+                                } else {
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                    else
+                if (accounts[account_index].balance < new_transaction.amount) {
+                    printf("You don't have that much money in your account!\n");
+                    return;
+                } else {
+                    strcpy(new_transaction.type, "Withdraw");
+                    if (strcmp(accounts[account_index].account_type, "Savings") == 0) {
+                        printf("This is a savings account. For each transaction you make we will take 5 percent of the transaction value! Are you sure you want to do that?\n");
+                        while (1) {
+                            printf("1. Yes\n2. No\n");
+                            char input_afirmation[5];
+                            scanf("%s", &input_afirmation);
+                            if (strlen(input_afirmation) > 1)       // verify if the command is valid, if not print error message
+                                printf("Invalid command.\n");
+                            else {
+                                int option1 = input_afirmation[0] - '0';
+                                if (option1 == 1) {
+                                    new_transaction.amount = new_transaction.amount + (new_transaction.amount * 5) / 100;
+                                    break;
+                                } else {
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+                strcpy(new_transaction.from_acc_iban, accounts[account_index].iban);
+                strcpy(new_transaction.to_acc_iban, "0");
+            } else if (option == 3) {
+                strcpy(new_transaction.type, "Transfer-");
+                printf("Please enter the iban you want to make the transfer to:\n");
+                char iban[24];
+                scanf("%s", iban);
+                for (int i = 0; i < active_accounts; i++) {
+
+                    if (strcmp(iban, accounts[i].iban) == 0) {
+                        index = i;
+                        break;
+                    }
+
+                }
+                //printf("%d", index);
+                if(index == -1)
+                {
+                    printf("We did not find any account with this iban! Returning in the menu...\n");
+                    return;
+                }
+                if (accounts[account_index].balance < new_transaction.amount) {
+                    printf("You don't have that much money in your account!\n");
+                    return;
+                } else {
+                    if (strcmp(accounts[account_index].account_type, "Savings") == 0) {
+                        printf("This is a savings account. For each transaction you make we will take 5 percent of the transaction value! Are you sure you want to do that?\n");
+                        while (1) {
+                            printf("1. Yes\n2. No\n");
+                            char input_afirmation[5];
+                            scanf("%s", &input_afirmation);
+                            if (strlen(input_afirmation) > 1)       // verify if the command is valid, if not print error message
+                                printf("Invalid command.\n");
+                            else {
+                                int option1 = input_afirmation[0] - '0';
+                                if (option1 == 1) {
+                                    new_transaction.amount = new_transaction.amount + (new_transaction.amount * 5) / 100;
+                                    break;
+                                } else {
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+                accounts[index].transactions[accounts[index].number_of_transactions].data = new_transaction.data;
+                accounts[index].transactions[accounts[index].number_of_transactions].amount = amount;
+                strcpy(accounts[index].transactions[accounts[index].number_of_transactions].description, new_transaction.description);
+                strcpy(accounts[index].transactions[accounts[index].number_of_transactions].type, "Transfer+");
+                strcpy(accounts[index].transactions[accounts[index].number_of_transactions].from_acc_iban, accounts[account_index].iban);
+                strcpy(accounts[index].transactions[accounts[index].number_of_transactions].to_acc_iban, accounts[index].iban);
+                accounts[index].number_of_transactions = accounts[index].number_of_transactions + 1;
+                accounts[index].balance = calculate_balance(accounts, index);
+
+            }
+            else if(option == 4)
+            {
+                strcpy(new_transaction.type, "Payment");
+                if(strcmp(accounts[account_index].account_type, "Credit") == 0 && accounts[account_index].balance - new_transaction.amount > -((2024 - accounts[account_index].user_birthday.year) * 100 + accounts[account_index].user_birthday.month * 50))
+                {
+                    strcpy(new_transaction.type, "Payment");
+                    printf("You will borrow money from us, and your balance will be under 0 are you sure?");
+                    while (1) {
+                        printf("1. Yes\n2. No\n");
+                        char input_afirmation[5];
+                        scanf("%s", &input_afirmation);
+                        if (strlen(input_afirmation) > 1)       // verify if the command is valid, if not print error message
+                            printf("Invalid command.\n");
+                        else {
+                            int option1 = input_afirmation[0] - '0';
+                            if (option1 == 1) {
+                                break;
+                            } else {
+                                return;
+                            }
+                        }
+                    }
+                }
+                else
+                if (accounts[account_index].balance < new_transaction.amount) {
+                    printf("You don't have that much money in your account!\n");
+                    return;
+                } else {
+                    if (strcmp(accounts[account_index].account_type, "Savings") == 0) {
+                        printf("This is a savings account. For each transaction you make we will take 5 percent of the transaction value! Are you sure you want to do that?\n");
+                        while (1) {
+                            printf("1. Yes\n2. No\n");
+                            char input_afirmation[5];
+                            scanf("%s", &input_afirmation);
+                            if (strlen(input_afirmation) > 1)       // verify if the command is valid, if not print error message
+                                printf("Invalid command.\n");
+                            else {
+                                int option1 = input_afirmation[0] - '0';
+                                if (option1 == 1) {
+                                    new_transaction.amount = new_transaction.amount + (new_transaction.amount * 5) / 100;
+                                    break;
+                                } else {
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+        }
+        break;
+    }
+
+    if(strcmp(accounts[account_index].account_type, "Savings") == 0)
+    {
+        accounts[account_index].transactions[accounts[account_index].number_of_transactions].data = new_transaction.data;
+        accounts[account_index].transactions[accounts[account_index].number_of_transactions].amount = (accounts[account_index].balance * 2) / 100;
+        strcpy(accounts[account_index].transactions[accounts[account_index].number_of_transactions].description, new_transaction.description);
+        strcpy(accounts[account_index].transactions[accounts[account_index].number_of_transactions].type, "Interest Rate");
+        strcpy(accounts[account_index].transactions[accounts[account_index].number_of_transactions].from_acc_iban, "1"); // 1 means from the bank
+        strcpy(accounts[account_index].transactions[accounts[account_index].number_of_transactions].to_acc_iban, accounts[account_index].iban);
+        accounts[account_index].number_of_transactions = accounts[account_index].number_of_transactions + 1;
+        accounts[account_index].balance = calculate_balance(accounts, account_index);
+    }
+
+    accounts[account_index].transactions[accounts[account_index].number_of_transactions] = new_transaction;
+    accounts[account_index].number_of_transactions = accounts[account_index].number_of_transactions + 1;
+    accounts[account_index].balance = calculate_balance(accounts, account_index);
+
+
+    printf("The transaction was added successfully\n"); // let the user know that the new translation is registered
+
+}
+
+void edit_account( struct account *accounts,int account_index)
+{
+    while (1) {
+        print_edit_account_menu();
+        char input[100];        // initialize the option
+
+        printf("Enter your option\n");  // ask the user for input
+
+        scanf("%s", &input);        // read the input
+
+        if (strlen(input) > 1)       // verify if the command is valid , if not print error message
+            printf("Invalid command. Please Please enter a number between 1 and 5\n");
+        else {
+            int option = input[0] - '0';        // transform the string of the option in integer
+
+            switch (option) {
+                case 1:
+                    while (getchar() != '\n');
+                    while(1) {
+                        printf("Enter your new first name:\n");
+                        char first_name[20];
+                        scanf("%s", first_name);
+                        if(check_if_name(first_name, strlen(first_name)) == 1)
+                        {
+                            strcpy(accounts[account_index].first_name, first_name);
+                            break;
+                        }
+                    }
+                    break;
+                case 2:
+                    while (getchar() != '\n');
+                    while(1){
+                        printf("Enter your new last name:\n");
+                        char second_name[20];
+                        scanf("%s", second_name);
+                        if(check_if_name(second_name, strlen(second_name)) == 1)
+                        {
+                            strcpy(accounts[account_index].second_name, second_name);
+                            break;
+                        }
+                    }
+                    break;
+                case 3:
+                    while (getchar() != '\n');
+                    while(1){
+                        char date[11];
+                        printf("Enter your new birthday (format YYYY-MM-DD)\n"); // we ask the user to introduce a date
+                        scanf("%s", date);
+
+                        if(is_date_valid(date) == 1)
+                        {
+                            if(2024 - calculate_year(date) > 18 || 2024 - calculate_year(date) == 18 && calculate_month(date) == 1 && calculate_day(date) <= 4){
+                                accounts[account_index].user_birthday.day = calculate_day(date);
+                                accounts[account_index].user_birthday.month = calculate_month(date);
+                                accounts[account_index].user_birthday.year = calculate_year(date);
+                                break;
+                            }
+                            else {
+                                printf("You must be 18 to have a bank account\n");
+                                return;
+                            }
+                        }
+                        else
+                            printf("Please enter a valid birthday\n");
+                    }
+                    break;
+                case 4:
+                {
+                    while (getchar() != '\n');
+
+                    int num_attempts = 0;
+                    while(1) {
+                        if (num_attempts == 5) {
+                            printf("How have you logged in? Already forgot your password? You are a robot! You made too many mistakes entering your password. ACCESS DENIED!!!\n");
+                            return;
+                        }
+                        printf("Enter your password:");
+                        char input_password[30];
+                        fgets(input_password, 30, stdin);
+                        if (strcmp(accounts[account_index].password, input_password) == 0) {
+                            while(1){
+                                printf("Enter your password\n");
+                                char password[30];
+                                fgets(password, 30, stdin);
+                                int capital = 0, special = 0, normal = 0, spaces = 0;
+                                if(strlen(password) < 5 || strlen(password) > 30)
+                                    printf("The length of the password must be between 5 and 30!\n");
+                                else {
+                                    for (int i = 0; i < strlen(password); i++) {
+                                        if (password[i] >= 'a' && password[i] <= 'z')
+                                            normal++;
+                                        else if (password[i] >= 'A' && password[i] <= 'Z')
+                                            capital++;
+                                        else if (password[i] == ' ')
+                                            spaces++;
+                                        else
+                                            special++;
+                                    }
+                                    if (special == 0 || normal == 0 || capital == 0 || spaces > 0)
+                                        printf("The password must contain at least one capital letter, one lower case letter, one special character and must not contain spaces\n");
+                                    else {
+                                        strcpy(accounts[account_index].password, password);
+                                        break;
+                                    }
+                                }
+                            }
+
+                            return;
+                        } else {
+                            num_attempts++;
+                            printf("Wrong password! You have %d attempts left\n", 5 - num_attempts);
+                        }
+                    }
+                    break;
+                }
+                case 5:
+                    break;
+            }
+        }
+    }
+}
+
+void change_accounts(struct account *accounts, int account_index) {
+    strcpy(accounts[account_index].iban, accounts[active_accounts].iban);
+    strcpy(accounts[account_index].password, accounts[active_accounts].password);
+    strcpy(accounts[account_index].second_name, accounts[active_accounts].second_name);
+    accounts[account_index].balance = accounts[active_accounts].balance;
+    accounts[account_index].is_administrator = accounts[active_accounts].is_administrator;
+    accounts[account_index].number_of_transactions = accounts[active_accounts].number_of_transactions;
+    accounts[account_index].number_of_friends = accounts[active_accounts].number_of_friends;
+    accounts[account_index].user_birthday.month = accounts[active_accounts].user_birthday.month;
+    accounts[account_index].user_birthday.day = accounts[active_accounts].user_birthday.day;
+    accounts[account_index].user_birthday.year = accounts[active_accounts].user_birthday.year;
+
+    // Allocate memory for transactions
+    accounts[account_index].transactions = malloc(100 * sizeof(struct transaction_format));
+
+    // Copy data to transactions
+    for (int i = 0; i < accounts[active_accounts].number_of_transactions; i++) {
+        // Copy transaction data
+        accounts[account_index].transactions[i].amount = accounts[active_accounts].transactions[i].amount;
+        accounts[account_index].transactions[i].data.year = accounts[active_accounts].transactions[i].data.year;
+        accounts[account_index].transactions[i].data.month = accounts[active_accounts].transactions[i].data.month;
+        accounts[account_index].transactions[i].data.day = accounts[active_accounts].transactions[i].data.day;
+        strcpy(accounts[account_index].transactions[i].description, accounts[active_accounts].transactions[i].description);
+        strcpy(accounts[account_index].transactions[i].type, accounts[active_accounts].transactions[i].type);
+    }
+
+    accounts[account_index].contact = malloc(15 * sizeof (struct contacts_format));
+
+    for(int i = 0 ; i < accounts[active_accounts].number_of_friends ; i++)
+    {
+        strcpy(accounts[account_index].contact[i].first_name, accounts[active_accounts].contact[i].first_name);
+        strcpy(accounts[account_index].contact[i].second_name, accounts[active_accounts].contact[i].second_name);
+        strcpy(accounts[account_index].contact[i].iban, accounts[active_accounts].contact[i].iban);
+
+    }
+
+    free(accounts[active_accounts].contact);
+    accounts[active_accounts].contact = NULL;
+    // Free the transactions for the active account
+    free(accounts[active_accounts].transactions);
+    accounts[active_accounts].transactions = NULL;
+}
+
+void change_contacts(struct account *accounts, int account_index, int contact_index)
+{
+    // Free the memory for the contact to be deleted
+    free(&accounts[account_index].contact[contact_index]);
+
+    // Shift the remaining contacts to fill the gap
+    for (int i = contact_index; i < accounts[account_index].number_of_friends - 1; i++) {
+        strcpy(accounts[account_index].contact[i].first_name, accounts[account_index].contact[i + 1].first_name);
+        strcpy(accounts[account_index].contact[i].second_name, accounts[account_index].contact[i + 1].second_name);
+        strcpy(accounts[account_index].contact[i].iban, accounts[account_index].contact[i + 1].iban);
+    }
+
+    // Decrement the number of friends
+    accounts[account_index].number_of_friends--;
+}
+
+void print_contacts(struct account *accounts,int account_index)
+{
+    printf("-----Your list of contacts-----\n");
+    for(int i = 0 ; i < accounts[account_index].number_of_friends ; i++)
+    {
+        printf("%d. %s %s\n", i + 1, accounts[account_index].contact[i].first_name, accounts[account_index].contact[i].second_name);
+    }
+}
+
+void transaction_to_friend(struct account *accounts,int account_index)
+{
+    printf("To what friend do you want to transfer money?\n");
+
+    print_contacts(accounts, account_index);
+
+    struct transaction_format new_transaction;
+
+    while(1)
+    {
+        char input[10];
+        int number = 0;
+        int okay = 0;
+        while(1) {
+            printf("Enter your friends number!\n");
+
+            scanf("%s", input);
+
+            // Check if the input has only digits
+            int i;
+            for (i = 0; input[i] != '\0'; i++) {
+                if (!isdigit(input[i])) {
+                    printf("Error: Input contains non-digit characters.\n");
+                    okay = 1;  // Exit with an error code
+                    break;
+                }
+            }
+
+            // Convert the input to an integer
+            number = atoi(input);
+            if(number > 14 || number == 0 || okay == 1)
+            {
+                printf("Invalid input\n");
+            } else{
+                number--;
+                break;
+            }
+        }
+        if(number < accounts[account_index].number_of_friends)
+        {
+            while(1){
+                char date[11];
+                printf("Enter the date of the transaction (format YYYY-MM-DD)\n"); // we ask the user to introduce a date
+                scanf("%s", date);
+
+                if(is_date_valid(date) == 1)
+                {
+                    if(calculate_year(date) - accounts[account_index].user_birthday.year >= 0){
+                        new_transaction.data.day = calculate_day(date);
+                        new_transaction.data.month = calculate_month(date);
+                        new_transaction.data.year = calculate_year(date);
+                        break;
+                    }
+                    else {
+                        printf("You can't make transactions before you were born\n");
+                        return;
+                    }
+                }
+                else
+                    printf("Please enter a valid date\n");
+            }
+
+            printf("Enter the description:\n");         // ask the user to introduce a description of the transaction
+
+            scanf(" %[^\n]s", new_transaction.description); // we read the description string until a new line is met
+
+            char money[30];         // variable used for holding the input user , of the amount variable
+
+            while(1)
+            {
+                printf("Enter the amount(will be considered only the first 2 digits of the number):\n"); // ask the user to insert the amount of the transaction
+
+                scanf("%s", money);     // read the user input
+
+                if(money[0] == '-')                                             // the amount cannot be negative , because we will take into account if it's a Income or expense later
+                    printf("The amount entered must be a positive number\n");
+                else
+                if(verify_if_double(money) == -1)                         // we verify if the input has been introduced correctly
+                    printf("Invalid input please enter a valid sum\n");  // repeat until the introduced value is correct
+                else
+                    break;
+            }
+
+            new_transaction.amount = atof(money);   // we add the amount into the new structure with the atof function
+
+            float amount = new_transaction.amount;
+
+            strcpy(new_transaction.to_acc_iban, accounts[account_index].contact[number].iban);
+            strcpy(new_transaction.from_acc_iban, accounts[account_index].iban);
+            strcpy(new_transaction.type, "Transfer-");
+            char iban[23];
+            strcpy(iban, accounts[account_index].contact[(number)].iban);
+
+            int index = 0;
+
+            for (int i = 0; i < active_accounts; i++) {
+
+                if (strcmp(iban, accounts[i].iban) == 0) {
+                    index = i;
+                    break;
+                }
+
+            }
+            //printf("%d", index);
+            if(index == -1)
+            {
+                printf("We did not find any account with this iban! Maybe your friend deleted their account.Returning in the menu...\n");
+                return;
+            }
+
+            if (accounts[account_index].balance < new_transaction.amount) {
+                printf("You don't have that much money in your account!\n");
+                return;
+            } else {
+                if (strcmp(accounts[account_index].account_type, "Savings") == 0) {
+                    printf("This is a savings account. For each transaction you make we will take 5 percent of the transaction value! Are you sure you want to do that?\n");
+                    while (1) {
+                        printf("1. Yes\n2. No\n");
+                        char input_afirmation[5];
+                        scanf("%s", &input_afirmation);
+                        if (strlen(input_afirmation) > 1)       // verify if the command is valid, if not print error message
+                            printf("Invalid command.\n");
+                        else {
+                            int option1 = input_afirmation[0] - '0';
+                            if (option1 == 1) {
+                                new_transaction.amount = new_transaction.amount + (new_transaction.amount * 5) / 100;
+                                break;
+                            } else {
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+            accounts[index].transactions[accounts[index].number_of_transactions].data = new_transaction.data;
+            accounts[index].transactions[accounts[index].number_of_transactions].amount = amount;
+            strcpy(accounts[index].transactions[accounts[index].number_of_transactions].description, new_transaction.description);
+            strcpy(accounts[index].transactions[accounts[index].number_of_transactions].type, "Transfer+");
+            strcpy(accounts[index].transactions[accounts[index].number_of_transactions].from_acc_iban, accounts[account_index].iban);
+            strcpy(accounts[index].transactions[accounts[index].number_of_transactions].to_acc_iban, accounts[index].iban);
+            accounts[index].number_of_transactions = accounts[index].number_of_transactions + 1;
+            accounts[index].balance = calculate_balance(accounts, index);
+
+            accounts[account_index].transactions[accounts[account_index].number_of_transactions] = new_transaction;
+            accounts[account_index].number_of_transactions = accounts[account_index].number_of_transactions + 1;
+            accounts[account_index].balance = calculate_balance(accounts, account_index);
+
+            break;
+        }
+        else
+        {
+            printf("Please enter a valid number!\n");
+        }
+    }
+}
+
+void add_contact( struct account *accounts,int account_index)
+{
+
+    if(accounts[account_index].number_of_friends == 14)
+    {
+        printf("You have to many contacts delete one first!");
+        return;
+    }
+
+    char first_name[20], second_name[20];
+    while(1) {
+        printf("Enter the first name of your contact:\n");
+        scanf("%s", first_name);
+        if(check_if_name(first_name, strlen(first_name)) == 1)
+        {
+            break;
+        }
+    }
+
+    while(1){
+        printf("Enter the last name of your contact:\n");
+        scanf("%s", second_name);
+        if(check_if_name(second_name, strlen(second_name)) == 1)
+        {
+            break;
+        }
+    }
+
+    while (getchar() != '\n');
+
+    printf("Please enter the iban of your friend:\n");
+    char iban[24];
+    scanf("%s", iban);
+    int index = -1;
+    for (int i = 0; i < active_accounts; i++) {
+
+        if (strcmp(iban, accounts[i].iban) == 0) {
+            index = i;
+            break;
+        }
+
+    }
+    //printf("%d", index);
+    if(index == -1)
+    {
+        printf("We did not find any account with this iban! Returning in the menu...\n");
+        return;
+    }
+    strcpy(accounts[account_index].contact[accounts[account_index].number_of_friends].first_name, first_name);
+    strcpy(accounts[account_index].contact[accounts[account_index].number_of_friends].second_name, second_name);
+    strcpy(accounts[account_index].contact[accounts[account_index].number_of_friends].iban, iban);
+
+    accounts[account_index].number_of_friends = accounts[account_index].number_of_friends + 1;
+
+
+}
+
+void delete_contact( struct account *accounts,int account_index)
+{
+    printf("Which contact do you want to delete!\n");
+
+    char first_name[20], second_name[20];
+    while(1) {
+        printf("Enter the first name of your contact:\n");
+        scanf("%s", first_name);
+        if(check_if_name(first_name, strlen(first_name)) == 1)
+        {
+            break;
+        }
+    }
+
+    while(1){
+        printf("Enter the last name of your contact:\n");
+        scanf("%s", second_name);
+        if(check_if_name(second_name, strlen(second_name)) == 1)
+        {
+            break;
+        }
+    }
+
+    for (int i = 0 ; i < accounts[account_index].number_of_friends ; i++)
+    {
+        if(strcmp(accounts[account_index].contact[i].first_name, first_name) == 0 && strcmp(accounts[account_index].contact[i].second_name, second_name) == 0)
+        {
+            printf("Are you sure you want to delete this contact? Type CONFIRM\n");
+            char input[20];
+            scanf("%s", input);
+            if(strcmp(input, "CONFIRM") == 0)
+            {
+                change_contacts(accounts, account_index, i);
+            }
+            else{
+                return;
+            }
+        }
+    }
+
+}
+
+void delete_account( struct account *accounts,int account_index)
+{
+    printf("Are you sure you want to delete your account?");
+    printf("Please type the text CONFIRM if you want to delete your account");
+
+    printf(">");
+
+    char text[10];
+
+    scanf("%s", text);
+
+    if(strcmp(text, "CONFIRM") == 0)
+    {
+        change_accounts(accounts, account_index);
+        printf("You successfully deleted your account!");
+        active_accounts--;
+        return;
+    }
+
+    return;
+}
+
+void financial_report( struct account *accounts,int account_index)
+{
+    if(accounts[account_index].number_of_transactions == 0)
+    {
+        printf("There is no transaction made until this moment. Please insert a transaction first!\n");
+        return;
+    }
+    printf("Between what dates do you want a financial report for?\n"); // ask user for input
+
+    char first_date[15], second_date[15];   // variables to hold the two dates
+
+    while(1)
+    {
+        printf("Enter the beginning date(format YYYY-MM-DD):\n");   // ask the user for beginning date
+
+        scanf("%s", first_date);        // read the beginning date
+
+        if(is_date_valid(first_date) == 1)      // we verify if the date is valid
+        {
+            break;
+        }
+        else
+            printf("Please enter a valid date of the format YYYY-MM-DD\n"); // if the date is not valid print an error
+    }
+
+    int year_first_date = calculate_year(first_date);
+    int month_first_date = calculate_month(first_date); // transform the string of the beginning date into integers, year , month , day
+    int day_first_date = calculate_day(first_date);
+
+    while(1)
+    {
+        printf("Enter the ending date(format YYYY-MM-DD):\n");  // ask the user for the end date
+
+        scanf("%s", second_date);   // read the end date
+
+        if(is_date_valid(second_date) == 1)     // we verify if the date is valid
+        {
+            int year_second_date = calculate_year(second_date);
+            int month_second_date = calculate_month(second_date);       // transform the string of the end date into integers , year , month , day
+            int day_second_date = calculate_day(second_date);
+
+            if(compare_dates(year_first_date, month_first_date, day_first_date,
+                             year_second_date, month_second_date, day_second_date) == -1)    // verify if the end date is greater than the beginning date
+            {
+                break;
+            }
+            else
+            {
+                printf("Please enter a date that is greater than the beginning date!\n"); // if the end date is smaller than the beginning date print error message
+            }
+        }
+        else
+            printf("Please enter a valid date of the format YYYY-MM-DD\n");     // print error if the date is not valid
+    }
+
+    int year_second_date = calculate_year(second_date);
+    int month_second_date = calculate_month(second_date);   // transform the string of the end date into integers , year , month , day
+    int day_second_date = calculate_day(second_date);
+
+
+
+    float expenses = 0;        // initialize the income and expenses of all the transactions
+    float incomes = 0;
+
+    for( int i = 0 ; i < accounts[account_index].number_of_transactions ; i++)
+    {
+        int year = accounts[account_index].transactions[i].data.year;
+        int month = accounts[account_index].transactions[i].data.month;
+        int day = accounts[account_index].transactions[i].data.day;
+
+        if(is_between_dates(year_first_date, month_first_date, day_first_date,
+                            year_second_date, month_second_date, day_second_date, year, month, day) == 1)
+        {                                         // verify if the current transaction is between the dates asked by the user
+            if(strcmp(accounts[account_index].transactions[i].type, "Deposit") == 0)
+                incomes = incomes + accounts[account_index].transactions[i].amount;
+
+            if(strcmp(accounts[account_index].transactions[i].type, "Transfer+") == 0)
+                incomes = incomes + accounts[account_index].transactions[i].amount;
+
+            if(strcmp(accounts[account_index].transactions[i].type, "Interest Rate") == 0)
+                incomes = incomes + accounts[account_index].transactions[i].amount;
+
+            if(strcmp(accounts[account_index].transactions[i].type, "Withdraw") == 0)
+                expenses = expenses + accounts[account_index].transactions[i].amount;
+
+            if(strcmp(accounts[account_index].transactions[i].type, "Transfer-") == 0)
+                expenses = expenses + accounts[account_index].transactions[i].amount;
+
+            if(strcmp(accounts[account_index].transactions[i].type, "Payment") == 0)
+                expenses = expenses + accounts[account_index].transactions[i].amount;
+        }
+    }
+
+    printf("For the period %s", first_date);    // print the incomes and expenses of the given period of time
+
+    printf(" - ");
+
+    printf("%s\n", second_date);
+
+    printf("The income is %lf\n", incomes);
+
+    printf("The expenses are %lf\n", expenses);
+
+}
+
+void transaction_history( struct account *accounts,int account_index)
+{
+    printf("------Your transaction history------");
+
+    for( int i = 0 ; i < accounts[account_index].number_of_transactions ; i++)
+    {
+        printf("%d. Type: %s\n   Amount: %f\n   The date: %d/%d/%d\n   Description: %s\n   From the iban: %s\n   To the account iban: %s\n", i + 1,
+               accounts[account_index].transactions[i].type, accounts[account_index].transactions[i].amount, accounts[account_index].transactions[i].data.day,
+               accounts[account_index].transactions[i].data.month, accounts[account_index].transactions[i].data.year,
+               accounts[account_index].transactions[i].description,
+               accounts[account_index].transactions[i].from_acc_iban, accounts[account_index].transactions[i].to_acc_iban);
+    }
+}
+
+void in_login_ui( struct account *accounts,int account_index)
+{
+    printf("        Welcome back!\n");
+    while(1) {
+        print_user_options();
+        char input[100];        // initialize the option
+
+        printf("Enter your option\n");  // ask the user for input
+
+        scanf("%s", &input);        // read the input
+
+        if(strlen(input) > 2)       // verify if the command is valid , if not print error message
+            printf("Invalid command. Please Please enter a number between 1 and 12\n");
+        else{
+            int option;
+            if(strlen(input) == 1)
+            {
+                option = input[0] - '0';        // transform the string of the option in integer
+            }
+            else{
+                option = (input[0] - '0') * 10 + input[1] - '0';
+            }
+
+            switch (option) {
+                case 1:
+                    account_details(accounts, account_index);
+                    break;
+                case 2:
+                    add_transaction(accounts, account_index);
+                    //printf("%d", accounts[account_index].number_of_transactions);
+                    break;
+                case 3:
+                    printf("Your balance is %f\n", accounts[account_index].balance);
+                    break;
+                case 4:
+                    edit_account(accounts, account_index);
+                    break;
+                case 5:
+                    delete_account(accounts, account_index);
+                    return;
+                case 6:
+                    financial_report(accounts, account_index);
+                    break;
+                case 7:
+                    transaction_history(accounts, account_index);
+                    break;
+                case 8:
+                    print_contacts(accounts, account_index);
+                    break;
+                case 9:
+                    add_contact(accounts, account_index);
+                    break;
+                case 10:
+                    delete_contact(accounts, account_index);
+                    break;
+                case 11:
+                    transaction_to_friend(accounts, account_index);
+                    break;
+                case 12:
+                    return;
+                default:
+                    printf("Invalid option");
+            }
+        }
+    }
+}
+
+void register_account( struct account *accounts)
+{
+    while(1) {
+        printf("Enter your first name:\n");
+        char first_name[20];
+        scanf("%s", first_name);
+        if(check_if_name(first_name, strlen(first_name)) == 1)
+        {
+            strcpy(accounts[active_accounts].first_name, first_name);
+            break;
+        }
+    }
+
+    while(1){
+        printf("Enter your last name:\n");
+        char second_name[20];
+        scanf("%s", second_name);
+        if(check_if_name(second_name, strlen(second_name)) == 1)
+        {
+            strcpy(accounts[active_accounts].second_name, second_name);
+            break;
+        }
+    }
+
+    while (getchar() != '\n');
+    int is_not_18 = 0;
+    while(1){
+        char date[11];
+        printf("Enter your birthday (format YYYY-MM-DD)\n"); // we ask the user to introduce a date
+        scanf("%s", date);
+
+        if(is_date_valid(date) == 1)
+        {
+            if(2024 - calculate_year(date) > 18 || 2024 - calculate_year(date) == 18 && calculate_month(date) == 1 && calculate_day(date) <= 4){
+                accounts[active_accounts].user_birthday.day = calculate_day(date);
+                accounts[active_accounts].user_birthday.month = calculate_month(date);
+                accounts[active_accounts].user_birthday.year = calculate_year(date);
+                break;
+            }
+            else {
+                printf("You must be 18 to create a bank account\n");
+                return;
+            }
+        }
+        else
+            printf("Please enter a valid birthday\n");
+    }
+    printf("%d", accounts[active_accounts].user_birthday.year);
+
+    while (getchar() != '\n');
+    printf("%d", accounts[active_accounts].user_birthday.year);
+
+    while(1){
+        printf("Enter your password\n");
+        char password[30];
+        fgets(password, 30, stdin);
+        int capital = 0, special = 0, normal = 0, spaces = 0;
+        if(strlen(password) < 5 || strlen(password) > 30)
+            printf("The length of the password must be between 5 and 30!\n");
+        else {
+            for (int i = 0; i < strlen(password); i++) {
+                if (password[i] >= 'a' && password[i] <= 'z')
+                    normal++;
+                else if (password[i] >= 'A' && password[i] <= 'Z')
+                    capital++;
+                else if (password[i] == ' ')
+                    spaces++;
+                else
+                    special++;
+            }
+            if (special == 0 || normal == 0 || capital == 0 || spaces > 0)
+                printf("The password must contain at least one capital letter, one lower case letter, one special character and must not contain spaces\n");
+            else {
+                strcpy(accounts[active_accounts].password, password);
+                break;
+            }
+        }
+    }
+    printf("%d", accounts[active_accounts].user_birthday.year);
+
+    while(1){
+        printf("Are you an administrator?\n");
+        printf(">Yes\n>No\n");
+        char input[5];
+        scanf("%s", input);
+
+        if(strcmp(input, "Yes") == 0)
+        {
+            int number_attempts = 0;
+            while(1)
+            {
+                if(number_attempts == 3)
+                {
+                    printf("You entered the wrong passkey too many times. Your account will not have the administrator features!\n");
+                    break;
+                }
+
+                number_attempts++;
+
+                printf("Enter the administrator passkey:\n");
+                char passkey_input[10];
+
+                scanf("%s", passkey_input);
+
+                if(strcmp(passkey_input, "PT09CL06") == 0)
+                {
+                    accounts[active_accounts].is_administrator = 1;
+                    break;
+                }
+                else{
+                    printf("Wrong passkey! You have %d attempts left\n", 3 - number_attempts);
+                }
+            }
+            break;
+        }
+        else
+        if(strcmp(input, "No") == 0)
+        {
+            accounts[active_accounts].is_administrator = 0;
+            break;
+        }
+        else{
+            printf("Invalid input!\n");
+        }
+    }
+    printf("%d", accounts[active_accounts].user_birthday.year);
+
+    while(1){
+        printf("What type of account do you want to create?\n");
+        printf("1. Savings account\n");
+        printf("2. Checking account\n");
+        printf("3. Credit account\n");
+
+        char input[10];
+
+        printf("Enter your option:");
+
+        scanf("%s", input);
+
+        if(input[0] - '0' < 4 && input[0] - '0' > 0)
+        {
+            if(input[0] - '0' == 1)
+                strcpy(accounts[active_accounts].account_type, "Savings");
+
+            if(input[0] - '0' == 2)
+                strcpy(accounts[active_accounts].account_type, "Checkings");
+
+            if(input[0] - '0' == 3)
+                strcpy(accounts[active_accounts].account_type, "Credit");
+            break;
+        }
+        else
+            printf("Invalid option\n");
+    }
+    printf("%d", accounts[active_accounts].user_birthday.year);
+
+    accounts[active_accounts].transactions = malloc(100 * sizeof(struct transaction_format));
+    accounts[active_accounts].contact = malloc(15 * sizeof (struct contacts_format));
+
+    accounts[active_accounts].iban[0] = 'R';
+    accounts[active_accounts].iban[1] = 'O';
+
+    int sum = calculate_sum_of_digits(num_accounts);
+
+    if (sum > 99)
+        sum = calculate_sum_of_digits(sum);
+
+    accounts[active_accounts].iban[2] = (sum / 10) + '0';
+    accounts[active_accounts].iban[3] = (sum % 10) + '0';
+
+    accounts[active_accounts].iban[4] = 'L';
+    accounts[active_accounts].iban[5] = 'C';
+    accounts[active_accounts].iban[6] = 'F';
+    accounts[active_accounts].iban[7] = 'A';
+
+    int aux = active_accounts;
+    int index = 23;
+    printf("%d", accounts[active_accounts].user_birthday.year);
+
+    accounts[active_accounts].iban[index + 1] = '\0';
+    printf("%d", accounts[active_accounts].user_birthday.year);
+
+    while (aux)
+    {
+        accounts[active_accounts].iban[index] = (aux % 10) + '0';
+        index--;
+        aux = aux / 10;
+    }
+
+    for (int i = index ; i >= 8 ; i--)
+        accounts[active_accounts].iban[i] = '0';
+    printf("%d", accounts[active_accounts].user_birthday.year);
+
+    printf("Your iban is:");
+
+    for (int  i = 0 ; i <= 23 ; i++)
+        printf("%c",accounts[active_accounts].iban[i]);
+
+    printf("\n");
+
+}
+
+void login( struct account *accounts)
+{
+    char first_name[20], second_name[20];
+    while(1) {
+        printf("Enter your first name:\n");
+        scanf("%s", first_name);
+        if(check_if_name(first_name, strlen(first_name)) == 1)
+        {
+            break;
+        }
+    }
+
+    while(1){
+        printf("Enter your last name:\n");
+        scanf("%s", second_name);
+        if(check_if_name(second_name, strlen(second_name)) == 1)
+        {
+            break;
+        }
+    }
+
+    while (getchar() != '\n');
+
+    for (int i = 0 ; i < active_accounts ; i++)
+    {
+        if (strcmp(accounts[i].first_name, first_name) == 0 && strcmp(accounts[i].second_name, second_name) == 0)
+        {
+            int num_attempts = 0;
+            while(1)
+            {
+                if (num_attempts == 5)
+                {
+                    printf("You are a robot! You made too many mistakes entering your password. ACCESS DENIED!!!\n");
+                    return;
+                }
+                printf("Enter your password:");
+                char input_password[30];
+                fgets(input_password, 30, stdin);
+
+                if(strcmp(accounts[i].password, input_password) == 0) {
+                    printf("You successfully logged in!\n");
+                    in_login_ui(accounts, i);
+                    return ;
+                }
+                else
+                {
+                    num_attempts++;
+                    printf("Wrong password! You have %d attempts left\n", 5 - num_attempts);
+                }
+
+            }
+        }
+
+    }
+    printf("Error! We couldn't find your name in our database.\n");
+
+}
+
+int main() {
+
+    printf("----Managing Financial Data App----\n");        // print the app title
+
+    printf("Welcome to the World Finance Bank! How can we help you?\n\n"); // print welcome message
+
+    struct account *accounts = malloc(100 * sizeof(struct account));
+    /*
+    strcpy(accounts[0].first_name, "Tan");
+    strcpy(accounts[0].second_name, "Ste");
+    strcpy(accounts[0].iban, "RO00LCFA000000000000000");
+    strcpy(accounts[0].password, "0\n");
+    //printf("%s", accounts[0].password);
+    //printf("%d",strcmp(accounts[0].password, "0"));
+    strcpy(accounts[0].account_type, "Savings");
+    accounts[0].user_birthday.year = 2004;
+    accounts[0].user_birthday.month = 5;
+    accounts[0].user_birthday.day = 21;
+    active_accounts++;
+
+    strcpy(accounts[1].first_name, "Pop");
+    strcpy(accounts[1].second_name, "Vali");
+    strcpy(accounts[1].iban, "RO00LCFA000000000000001");
+    strcpy(accounts[1].password, "0\n");
+    //printf("%s", accounts[0].password);
+    //printf("%d",strcmp(accounts[0].password, "0"));
+    strcpy(accounts[1].account_type, "Credit");
+    accounts[1].user_birthday.year = 2004;
+    accounts[1].user_birthday.month = 5;
+    accounts[1].user_birthday.day = 21;
+    active_accounts++;
+     */
+    while(1)
+    {
+
+        print_menu();
+
+        char input[100];        // initialize the option
+
+        printf("Enter your option\n");  // ask the user for input
+
+        scanf("%s", &input);        // read the input
+
+        if(strlen(input) > 1)       // verify if the command is valid , if not print error message
+            printf("Invalid command. Please Please enter a number between 1 and 5\n");
+        else
+        {
+            int option = input[0] - '0';        // transform the string of the option in integer
+            switch(option)          // do the action the user asked for
+            {
+                case 1:
+                    login(accounts);
+                    break;
+                case 2:
+                    register_account(accounts);
+                    active_accounts = active_accounts + 1;
+                    num_accounts = num_accounts + 1;
+                    break;
+                case 3:
+                    break;
+                case 4:
+
+                    break;
+                case 5:
+                    printf("Thank you for using our services! We hope that you will come back! Have a great day!\n");       // print exit message
+                    free(accounts);
+                    exit(0);
+
+                default:
+                    printf("Invalid choice. Please enter a number between 1 and 5\n");  // if the user's option is not valid print error message
+            }
+        }
+    }
+
+    return 0;
+}

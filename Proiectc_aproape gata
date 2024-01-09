@@ -9,6 +9,9 @@ struct date_format {
 
 int active_accounts = 0, num_accounts = 0;
 
+
+
+
 struct transaction_format {
     char type[20];
     float amount;
@@ -24,6 +27,17 @@ struct contacts_format{
     char iban[24];
 
 };
+struct audit_log{
+    char first_name[20];
+    char second_name[20];
+    char action[20];
+    char transfer_from[20];
+    char transfer_to[20];
+    float amount;
+};
+
+struct audit_log auditLog[1000];
+
 struct account{
     int is_administrator;
     int number_of_friends;
@@ -456,6 +470,9 @@ void add_transaction(struct account *accounts, int account_index)
                         }
                     }
                 }
+                strcpy(new_transaction.from_acc_iban, accounts[index].iban);
+                strcpy(new_transaction.to_acc_iban, accounts[account_index].iban);
+
                 accounts[index].transactions[accounts[index].number_of_transactions].data = new_transaction.data;
                 accounts[index].transactions[accounts[index].number_of_transactions].amount = amount;
                 strcpy(accounts[index].transactions[accounts[index].number_of_transactions].description, new_transaction.description);
@@ -657,7 +674,7 @@ void edit_account( struct account *accounts,int account_index)
                     break;
                 }
                 case 5:
-                    break;
+                    return;
             }
         }
     }
@@ -1241,15 +1258,20 @@ void register_account( struct account *accounts)
         else
             printf("Please enter a valid birthday\n");
     }
-    printf("%d", accounts[active_accounts].user_birthday.year);
 
     while (getchar() != '\n');
-    printf("%d", accounts[active_accounts].user_birthday.year);
 
     while(1){
         printf("Enter your password\n");
         char password[30];
-        fgets(password, 30, stdin);
+        fgets(password, sizeof(password), stdin);
+
+        // Remove the newline character from the password
+        size_t len = strlen(password);
+        if (len > 0 && password[len - 1] == '\n') {
+            password[len - 1] = '\0';
+        }
+
         int capital = 0, special = 0, normal = 0, spaces = 0;
         if(strlen(password) < 5 || strlen(password) > 30)
             printf("The length of the password must be between 5 and 30!\n");
@@ -1272,7 +1294,6 @@ void register_account( struct account *accounts)
             }
         }
     }
-    printf("%d", accounts[active_accounts].user_birthday.year);
 
     while(1){
         printf("Are you an administrator?\n");
@@ -1319,7 +1340,6 @@ void register_account( struct account *accounts)
             printf("Invalid input!\n");
         }
     }
-    printf("%d", accounts[active_accounts].user_birthday.year);
 
     while(1){
         printf("What type of account do you want to create?\n");
@@ -1348,7 +1368,6 @@ void register_account( struct account *accounts)
         else
             printf("Invalid option\n");
     }
-    printf("%d", accounts[active_accounts].user_birthday.year);
 
     accounts[active_accounts].transactions = malloc(100 * sizeof(struct transaction_format));
     accounts[active_accounts].contact = malloc(15 * sizeof (struct contacts_format));
@@ -1370,11 +1389,9 @@ void register_account( struct account *accounts)
     accounts[active_accounts].iban[7] = 'A';
 
     int aux = active_accounts;
-    int index = 23;
-    printf("%d", accounts[active_accounts].user_birthday.year);
+    int index = 22;
 
     accounts[active_accounts].iban[index + 1] = '\0';
-    printf("%d", accounts[active_accounts].user_birthday.year);
 
     while (aux)
     {
@@ -1385,7 +1402,6 @@ void register_account( struct account *accounts)
 
     for (int i = index ; i >= 8 ; i--)
         accounts[active_accounts].iban[i] = '0';
-    printf("%d", accounts[active_accounts].user_birthday.year);
 
     printf("Your iban is:");
 
@@ -1434,7 +1450,10 @@ void login( struct account *accounts)
                 printf("Enter your password:");
                 char input_password[30];
                 fgets(input_password, 30, stdin);
-
+                size_t len = strlen(input_password);
+                if (len > 0 && input_password[len - 1] == '\n') {
+                    input_password[len - 1] = '\0';
+                }
                 if(strcmp(accounts[i].password, input_password) == 0) {
                     printf("You successfully logged in!\n");
                     in_login_ui(accounts, i);
@@ -1454,6 +1473,121 @@ void login( struct account *accounts)
 
 }
 
+void exportDataToCSV(struct account *accounts, int numAccounts) {
+    FILE *file = fopen("data.csv", "w");  // Open the CSV file for writing
+
+    if (file == NULL) {
+        printf("Error opening file for writing.\n");
+        return;
+    }
+
+    // Write CSV header
+
+    // Write each account's data to the CSV file
+    for (int i = 0; i < numAccounts; i++) {
+        fprintf(file, "First Name,Second Name,Password,Account Type,Is administrator,Balance,IBAN,User Birthday,Number of Transactions,Number of friends\n");
+        fprintf(file, "%s,%s,%s,%s,%d,%.2f,%s,%d-%d-%d,%d,%d\n",
+                accounts[i].first_name, accounts[i].second_name,
+                accounts[i].password, accounts[i].account_type, accounts[i].is_administrator,
+                accounts[i].balance, accounts[i].iban,
+                accounts[i].user_birthday.year, accounts[i].user_birthday.month,
+                accounts[i].user_birthday.day, accounts[i].number_of_transactions,
+                accounts[i].number_of_friends);
+        // ,Transaction Type,Transaction Amount,Transaction Description,From Account IBAN,To Account IBAN,Transaction Date,First name,Last name, IBAN
+        fprintf(file, "Transaction Type,Transaction Amount,Transaction Description,From Account IBAN,To Account IBAN,Transaction Date\n");
+        // Write transaction data
+        for (int j = 0; j < accounts[i].number_of_transactions; j++) {
+            fprintf(file, "%s,%f,%s,%s,%s,%d/%d/%d\n",
+                    accounts[i].transactions[j].type,
+                    accounts[i].transactions[j].amount,
+                    accounts[i].transactions[j].description,
+                    accounts[i].transactions[j].from_acc_iban,
+                    accounts[i].transactions[j].to_acc_iban,
+                    accounts[i].transactions[j].data.day,
+                    accounts[i].transactions[j].data.month,
+                    accounts[i].transactions[j].data.year);
+        }
+        fprintf(file, "First name,Last name,IBAN\n");
+        // Write contact data
+        for (int k = 0; k < accounts[i].number_of_friends; k++) {
+            fprintf(file, "%s,%s,%s\n",
+                    accounts[i].contact[k].first_name,
+                    accounts[i].contact[k].second_name,
+                    accounts[i].contact[k].iban);
+        }
+
+    }
+
+    fclose(file);  // Close the CSV file
+
+}
+
+void importDataFromCSV(struct account *accounts, int *numAccounts) {
+    FILE *file = fopen("data.csv", "r");  // Open the CSV file for reading
+
+    if (file == NULL) {
+        printf("Error opening file for reading.\n");
+        return;
+    }
+
+    int active_accounts1 = 0;
+    char line[500];
+
+    while (fgets(line, sizeof(line), file) != NULL) {
+        if (strstr(line, "Account Type")) {
+            // Read account data
+            fgets(line, sizeof(line), file);
+            sscanf(line, "%99[^,],%99[^,],%99[^,],%99[^,],%d,%f,%99[^,],%d-%d-%d,%d,%d",
+                   accounts[active_accounts1].first_name, accounts[active_accounts1].second_name,
+                   accounts[active_accounts1].password, accounts[active_accounts1].account_type,
+                   &accounts[active_accounts1].is_administrator, &accounts[active_accounts1].balance,
+                   accounts[active_accounts1].iban, &accounts[active_accounts1].user_birthday.year,
+                   &accounts[active_accounts1].user_birthday.month, &accounts[active_accounts1].user_birthday.day,
+                   &accounts[active_accounts1].number_of_transactions,
+                   &accounts[active_accounts1].number_of_friends);
+
+            // Allocate memory for transactions and contacts only if not already allocated
+            if (accounts[active_accounts1].transactions == NULL) {
+                accounts[active_accounts1].transactions = malloc(accounts[active_accounts1].number_of_transactions * sizeof(struct transaction_format));
+            }
+
+            if (accounts[active_accounts1].contact == NULL) {
+                accounts[active_accounts1].contact = malloc(accounts[active_accounts1].number_of_friends * sizeof(struct contacts_format));
+            }
+
+            // Read transaction data
+            for (int i = 0; i < accounts[active_accounts1].number_of_transactions; i++) {
+                fgets(line, sizeof(line), file);
+                sscanf(line, "%99[^,],%f,%99[^,],%99[^,],%99[^,],%d-%d-%d",
+                       accounts[active_accounts1].transactions[i].type,
+                       &accounts[active_accounts1].transactions[i].amount,
+                       accounts[active_accounts1].transactions[i].description,
+                       accounts[active_accounts1].transactions[i].from_acc_iban,
+                       accounts[active_accounts1].transactions[i].to_acc_iban,
+                       &accounts[active_accounts1].transactions[i].data.day,
+                       &accounts[active_accounts1].transactions[i].data.month,
+                       &accounts[active_accounts1].transactions[i].data.year);
+            }
+
+            // Read contact data
+            for (int i = 0; i < accounts[active_accounts1].number_of_friends; i++) {
+                fgets(line, sizeof(line), file);
+                sscanf(line, "%99[^,],%99[^,],%99[^,]",
+                       accounts[active_accounts1].contact[i].first_name,
+                       accounts[active_accounts1].contact[i].second_name,
+                       accounts[active_accounts1].contact[i].iban);
+            }
+
+            (*numAccounts)++;
+            active_accounts1++;
+        }
+    }
+
+    fclose(file);  // Close the CSV file
+}
+
+
+
 int main() {
 
     printf("----Managing Financial Data App----\n");        // print the app title
@@ -1461,35 +1595,12 @@ int main() {
     printf("Welcome to the World Finance Bank! How can we help you?\n\n"); // print welcome message
 
     struct account *accounts = malloc(100 * sizeof(struct account));
-    /*
-    strcpy(accounts[0].first_name, "Tan");
-    strcpy(accounts[0].second_name, "Ste");
-    strcpy(accounts[0].iban, "RO00LCFA000000000000000");
-    strcpy(accounts[0].password, "0\n");
-    //printf("%s", accounts[0].password);
-    //printf("%d",strcmp(accounts[0].password, "0"));
-    strcpy(accounts[0].account_type, "Savings");
-    accounts[0].user_birthday.year = 2004;
-    accounts[0].user_birthday.month = 5;
-    accounts[0].user_birthday.day = 21;
-    active_accounts++;
 
-    strcpy(accounts[1].first_name, "Pop");
-    strcpy(accounts[1].second_name, "Vali");
-    strcpy(accounts[1].iban, "RO00LCFA000000000000001");
-    strcpy(accounts[1].password, "0\n");
-    //printf("%s", accounts[0].password);
-    //printf("%d",strcmp(accounts[0].password, "0"));
-    strcpy(accounts[1].account_type, "Credit");
-    accounts[1].user_birthday.year = 2004;
-    accounts[1].user_birthday.month = 5;
-    accounts[1].user_birthday.day = 21;
-    active_accounts++;
-     */
     while(1)
     {
 
         print_menu();
+        int *ptr_active_accounts = 0;
 
         char input[100];        // initialize the option
 
@@ -1513,9 +1624,10 @@ int main() {
                     num_accounts = num_accounts + 1;
                     break;
                 case 3:
+                    exportDataToCSV(accounts, active_accounts);
                     break;
                 case 4:
-
+                    importDataFromCSV(accounts, &active_accounts);
                     break;
                 case 5:
                     printf("Thank you for using our services! We hope that you will come back! Have a great day!\n");       // print exit message

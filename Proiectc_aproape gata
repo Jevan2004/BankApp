@@ -99,7 +99,7 @@ int check_if_name(char name[], int length)      // function to verify if a name 
     }
     return 1;
 }
-
+//2024-10-10
 int calculate_year(const char *date)            // calculate the year from a given data string
 {
     int year = (date[0] - '0') * 1000 + (date[1] - '0') * 100 + (date[2] - '0') * 10 + (date[3] -'0');  // we transform it into integer and return it
@@ -197,7 +197,7 @@ int calculate_sum_of_digits(int number)
     return sum;
 }
 
-//transform a given string into asterisk string(for the password)
+//transform a given string into asterisk string(for the password) password *****
 void from_string_to_asterisk(char text[])
 {
     for (int i = 0 ; i < strlen(text); i++)
@@ -677,11 +677,19 @@ void edit_account( struct account *accounts,int account_index)
                         printf("Enter your password:");     // ask for password
                         char input_password[30];
                         fgets(input_password, 30, stdin);
+                        size_t len = strlen(input_password);
+                        if (len > 0 && input_password[len - 1] == '\n') {
+                            input_password[len - 1] = '\0';
+                        }
                         if (strcmp(accounts[account_index].password, input_password) == 0) {        // if the password is correct
                             while(1){
                                 printf("Enter your password\n");
                                 char password[30];
                                 fgets(password, 30, stdin);
+                                size_t len = strlen(password);
+                                if (len > 0 && password[len - 1] == '\n') {
+                                    password[len - 1] = '\0';
+                                }
                                 int capital = 0, special = 0, normal = 0, spaces = 0;
                                 if(strlen(password) < 5 || strlen(password) > 30)
                                     printf("The length of the password must be between 5 and 30!\n");       // ask for the new one
